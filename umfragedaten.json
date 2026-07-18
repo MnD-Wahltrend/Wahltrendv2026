@@ -53,7 +53,7 @@
     {
       "id": "94m38kb9mrqtkcq6",
       "institute": "INSA",
-      "date": "2026-07-18",
+      "date": "2026-07-04",
       "values": {
         "cdu": 21,
         "spd": 13,
@@ -61,7 +61,8 @@
         "fdp": 4,
         "linke": 10,
         "afd": 29,
-        "sonstige": 10
+        "sonstige": 6,
+        "2ldx32a9mrqtmte9": 4
       }
     },
     {
