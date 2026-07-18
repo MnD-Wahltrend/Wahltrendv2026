@@ -340,7 +340,7 @@
     "INSA": 0.9,
     "YouGov": 0.9,
     "Civey": 0.85,
-    "GMS": 0.9
+    "GMS": 0.7
   },
   "halfLifeDays": 21
 }
