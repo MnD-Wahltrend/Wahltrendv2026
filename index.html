@@ -556,6 +556,46 @@ function Umfragetrend() {
 
   return (
     <div>
+      <div className="ut-panel">
+        <h3>{editingId ? "Umfrage bearbeiten" : "Neue Umfrage eintragen"}</h3>
+        <form onSubmit={submitPoll}>
+          <div className="ut-row">
+            <div className="ut-field" style={{ minWidth: 200 }}>
+              <label>Institut</label>
+              <input list="ut-institute-list" value={formInstitute} onChange={(e) => setFormInstitute(e.target.value)} placeholder="z. B. Forsa" />
+              <datalist id="ut-institute-list">
+                {instituteNames.map((n) => <option value={n} key={n} />)}
+              </datalist>
+            </div>
+            <div className="ut-field">
+              <label>Datum</label>
+              <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} max={todayISO()} />
+            </div>
+          </div>
+
+          <div style={{ height: 14 }} />
+          <div className="ut-field" style={{ marginBottom: 8 }}><label>Werte je Partei (%)</label></div>
+          <div className="ut-party-values">
+            {activeParties.map((p) => (
+              <div className="ut-party-value" key={p.id}>
+                <label><span className="ut-dot" style={{ background: p.color }} />{p.name}</label>
+                <input type="number" step="0.1" min="0" max="100" value={formValues[p.id] !== undefined ? formValues[p.id] : ""}
+                  onChange={(e) => setFormValues((prev) => ({ ...prev, [p.id]: e.target.value }))} />
+              </div>
+            ))}
+          </div>
+          <div className="ut-sum">
+            Summe: {formSum.toFixed(1).replace(".", ",")}%{" "}
+            {formSum > 0 && (formSum < 95 || formSum > 105) ? "— prüfen, weicht deutlich von 100% ab" : ""}
+          </div>
+          {formError && <div className="ut-error">{formError}</div>}
+          <div className="ut-tools">
+            <button className="ut-btn" type="submit">{editingId ? "Änderungen speichern" : "Umfrage hinzufügen"}</button>
+            {editingId && <button className="ut-btn secondary" type="button" onClick={resetForm}>Abbrechen</button>}
+          </div>
+        </form>
+      </div>
+
       <div id="ut-export-area">
       <div className="ut-hero">
         <div>
@@ -630,47 +670,6 @@ function Umfragetrend() {
           Bild für Substack exportieren
         </button>
       </div>
-
-      <div className="ut-panel">
-        <h3>{editingId ? "Umfrage bearbeiten" : "Neue Umfrage eintragen"}</h3>
-        <form onSubmit={submitPoll}>
-          <div className="ut-row">
-            <div className="ut-field" style={{ minWidth: 200 }}>
-              <label>Institut</label>
-              <input list="ut-institute-list" value={formInstitute} onChange={(e) => setFormInstitute(e.target.value)} placeholder="z. B. Forsa" />
-              <datalist id="ut-institute-list">
-                {instituteNames.map((n) => <option value={n} key={n} />)}
-              </datalist>
-            </div>
-            <div className="ut-field">
-              <label>Datum</label>
-              <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} max={todayISO()} />
-            </div>
-          </div>
-
-          <div style={{ height: 14 }} />
-          <div className="ut-field" style={{ marginBottom: 8 }}><label>Werte je Partei (%)</label></div>
-          <div className="ut-party-values">
-            {activeParties.map((p) => (
-              <div className="ut-party-value" key={p.id}>
-                <label><span className="ut-dot" style={{ background: p.color }} />{p.name}</label>
-                <input type="number" step="0.1" min="0" max="100" value={formValues[p.id] !== undefined ? formValues[p.id] : ""}
-                  onChange={(e) => setFormValues((prev) => ({ ...prev, [p.id]: e.target.value }))} />
-              </div>
-            ))}
-          </div>
-          <div className="ut-sum">
-            Summe: {formSum.toFixed(1).replace(".", ",")}%{" "}
-            {formSum > 0 && (formSum < 95 || formSum > 105) ? "— prüfen, weicht deutlich von 100% ab" : ""}
-          </div>
-          {formError && <div className="ut-error">{formError}</div>}
-          <div className="ut-tools">
-            <button className="ut-btn" type="submit">{editingId ? "Änderungen speichern" : "Umfrage hinzufügen"}</button>
-            {editingId && <button className="ut-btn secondary" type="button" onClick={resetForm}>Abbrechen</button>}
-          </div>
-        </form>
-      </div>
-
 
       <div className="ut-panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
