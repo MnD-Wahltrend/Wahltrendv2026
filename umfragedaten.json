@@ -1,0 +1,24 @@
+{
+  "parties": [
+    { "id": "cdu", "name": "CDU/CSU", "color": "#B9BEC7", "active": true },
+    { "id": "spd", "name": "SPD", "color": "#E3000F", "active": true },
+    { "id": "gruene", "name": "Grüne", "color": "#46962B", "active": true },
+    { "id": "fdp", "name": "FDP", "color": "#FFD600", "active": true },
+    { "id": "linke", "name": "Linke", "color": "#C9096C", "active": true },
+    { "id": "afd", "name": "AfD", "color": "#009EE0", "active": true },
+    { "id": "sonstige", "name": "Sonstige", "color": "#7D8796", "active": true }
+  ],
+  "polls": [],
+  "instituteWeights": {
+    "Forsa": 1.2,
+    "infratest dimap": 1.2,
+    "Allensbach": 1.1,
+    "Forschungsgruppe Wahlen": 1.2,
+    "Verian (Emnid)": 1.1,
+    "INSA": 0.9,
+    "YouGov": 0.9,
+    "Civey": 0.85,
+    "GMS": 0.9
+  },
+  "halfLifeDays": 21
+}
