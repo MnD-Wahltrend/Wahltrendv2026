@@ -802,6 +802,21 @@
         "sonstige": 5,
         "2ldx32a9mrqtmte9": 3
       }
+    },
+    {
+      "id": "5beh28ximrqyzuup",
+      "institute": "YouGov",
+      "date": "2026-05-12",
+      "values": {
+        "cdu": 22,
+        "spd": 13,
+        "gruene": 13,
+        "fdp": 4,
+        "linke": 11,
+        "afd": 28,
+        "sonstige": 5,
+        "2ldx32a9mrqtmte9": 4
+      }
     }
   ],
   "instituteWeights": {
