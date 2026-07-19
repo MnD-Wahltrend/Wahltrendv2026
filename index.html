@@ -542,16 +542,60 @@ function Umfragetrend() {
     const node = document.getElementById("ut-export-area");
     if (!node || !window.html2canvas) return;
     setGhStatus("Erzeuge Bild …");
-    window.html2canvas(node, { backgroundColor: "#0b1424", scale: 2 }).then((canvas) => {
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "umfragetrend-" + todayISO() + ".png";
-        a.click();
-        URL.revokeObjectURL(url);
+
+    // Klon des Inhalts, damit die Live-Seite unberührt bleibt
+    const clone = node.cloneNode(true);
+    clone.removeAttribute("id");
+
+    const frame = document.createElement("div");
+    frame.style.cssText = [
+      "position:fixed",
+      "top:0",
+      "left:-10000px",
+      "width:1000px",
+      "padding:48px",
+      "background:linear-gradient(160deg, #15223a 0%, #0b1424 65%)",
+      "border:1px solid #263953",
+      "border-radius:26px",
+      "font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+      "color:#f4f6fb",
+      "box-sizing:border-box",
+    ].join(";");
+
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:22px;";
+    header.innerHTML =
+      '<span style="width:10px;height:10px;border-radius:50%;background:#3f6ea5;display:inline-block;"></span>' +
+      '<span style="font-family:\'Archivo\',\'Inter\',sans-serif;font-weight:800;font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:#8fa0bc;">Umfragetrend</span>';
+
+    const footer = document.createElement("div");
+    footer.style.cssText = "margin-top:28px;padding-top:16px;border-top:1px solid #263953;display:flex;justify-content:space-between;font-size:12px;color:#8fa0bc;";
+    footer.innerHTML =
+      "<span>Gewichteter Trend auf Basis manuell erfasster Umfragen</span>" +
+      "<span>" + fmtDateLong(Date.now()) + "</span>";
+
+    frame.appendChild(header);
+    frame.appendChild(clone);
+    frame.appendChild(footer);
+    document.body.appendChild(frame);
+
+    window.html2canvas(frame, { backgroundColor: null, scale: 2, useCORS: true })
+      .then((canvas) => {
+        canvas.toBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "umfragetrend-" + todayISO() + ".png";
+          a.click();
+          URL.revokeObjectURL(url);
+        });
+        document.body.removeChild(frame);
+        setGhStatus("Bild erzeugt und heruntergeladen.");
+      })
+      .catch(() => {
+        document.body.removeChild(frame);
+        setGhStatus("Fehler beim Erzeugen des Bildes.");
       });
-    });
   }
 
   return (
