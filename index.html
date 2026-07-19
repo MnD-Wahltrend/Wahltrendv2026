@@ -670,6 +670,7 @@ function Umfragetrend() {
         <h3>Verlauf (gewichteter Trend, Punkte = einzelne Umfragen)</h3>
         <TrendChart trendSeries={trendSeries} rawByParty={rawByParty} parties={activeParties} />
       </div>
+      </div>
 
       <div className="ut-panel">
         <h3>Erfasste Umfragen ({polls.length})</h3>
@@ -703,7 +704,6 @@ function Umfragetrend() {
             </tbody>
           </table>
         )}
-      </div>
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
