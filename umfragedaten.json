@@ -16,13 +16,13 @@
       "id": "gruene",
       "name": "Grüne",
       "color": "#46962B",
-      "active": true
+      "active": false
     },
     {
       "id": "fdp",
       "name": "FDP",
       "color": "#FFD600",
-      "active": true
+      "active": false
     },
     {
       "id": "linke",
