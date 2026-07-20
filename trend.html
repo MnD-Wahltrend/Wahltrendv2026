@@ -44,14 +44,15 @@
 const { useState, useMemo, useEffect } = React;
 
 // ====== HIER EINMALIG ANPASSEN ======
-const GH_OWNER = "MnD-Wahltrend";
-const GH_REPO = "Wahltrendv2026";
+const GH_OWNER = "DEIN-GITHUB-BENUTZERNAME";
+const GH_REPO = "DEIN-REPOSITORY";
 const GH_PATH = "umfragedaten.json";
 const GH_BRANCH = "main";
 // =====================================
 
 const RAW_URL = "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/" + GH_PATH;
 const REFRESH_MS = 5 * 60 * 1000; // alle 5 Minuten neu laden
+const POLL_PAGE_SIZE = 15;
 
 const tsOf = (dateStr) => new Date(dateStr + "T00:00:00").getTime();
 const fmtDateShort = (ts) => new Date(ts).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
@@ -160,8 +161,12 @@ function PublicTrendView() {
   }, []);
 
   const parties = useMemo(() => (data ? data.parties.filter((p) => p.active) : []), [data]);
-  const polls = data ? data.polls : [];
   const instituteWeights = data ? data.instituteWeights : {};
+  const instituteActive = data ? data.instituteActive || {} : {};
+  const polls = useMemo(
+    () => (data ? data.polls.filter((p) => instituteActive[p.institute] !== false) : []),
+    [data]
+  );
   const halfLifeDays = data && typeof data.halfLifeDays === "number" ? data.halfLifeDays : 21;
   const maxAgeDays = data && typeof data.maxAgeDays === "number" ? data.maxAgeDays : 365;
   const asOfDate = todayISO();
@@ -204,6 +209,9 @@ function PublicTrendView() {
     if (polls.length === 0) return null;
     return polls.reduce((max, p) => (p.date > max ? p.date : max), polls[0].date);
   }, [data]);
+
+  const sortedPolls = useMemo(() => [...polls].sort((a, b) => (a.date < b.date ? 1 : -1)), [polls]);
+  const [visiblePollCount, setVisiblePollCount] = useState(POLL_PAGE_SIZE);
 
   if (error) {
     return <div id="root"><div className="ut-status">{error}</div></div>;
@@ -249,6 +257,7 @@ function PublicTrendView() {
         {polls.length === 0 ? (
           <div className="ut-status">Noch keine Umfragen erfasst.</div>
         ) : (
+          <>
           <table className="ut-table">
             <thead>
               <tr>
@@ -257,7 +266,7 @@ function PublicTrendView() {
               </tr>
             </thead>
             <tbody>
-              {[...polls].sort((a, b) => (a.date < b.date ? 1 : -1)).map((poll) => (
+              {sortedPolls.slice(0, visiblePollCount).map((poll) => (
                 <tr key={poll.id}>
                   <td>{poll.institute}</td>
                   <td>{fmtDateShort(tsOf(poll.date))}</td>
@@ -268,6 +277,14 @@ function PublicTrendView() {
               ))}
             </tbody>
           </table>
+          {sortedPolls.length > visiblePollCount && (
+            <div className="ut-tools">
+              <button className="ut-btn secondary" onClick={() => setVisiblePollCount((n) => n + POLL_PAGE_SIZE)}>
+                Ältere Umfragen anzeigen ({sortedPolls.length - visiblePollCount} weitere)
+              </button>
+            </div>
+          )}
+          </>
         )}
       </div>
 
