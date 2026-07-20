@@ -1195,6 +1195,7 @@
     "GMS": 0.7,
     "Insa": 1
   },
+  "instituteActive": {},
   "halfLifeDays": 14,
   "maxAgeDays": 100
 }
