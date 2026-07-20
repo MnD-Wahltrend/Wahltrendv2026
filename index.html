@@ -87,6 +87,7 @@ const b64DecodeUtf8 = (b64) => decodeURIComponent(escape(atob(b64.replace(/\n/g,
 
 const STATE_KEY = "umfragetrend-state";
 const GITHUB_CONFIG_KEY = "umfragetrend-github-config";
+const POLL_PAGE_SIZE = 15;
 
 const DEFAULT_PARTIES = [
   { id: "cdu", name: "CDU/CSU", color: "#B9BEC7", active: true },
@@ -230,6 +231,7 @@ function Umfragetrend() {
   const [parties, setParties] = useState((savedState && savedState.parties) || DEFAULT_PARTIES);
   const [polls, setPolls] = useState((savedState && savedState.polls) || []);
   const [instituteWeights, setInstituteWeights] = useState((savedState && savedState.instituteWeights) || DEFAULT_INSTITUTE_WEIGHTS);
+  const [instituteActive, setInstituteActive] = useState((savedState && savedState.instituteActive) || {});
   const [halfLifeDays, setHalfLifeDays] = useState(
     savedState && typeof savedState.halfLifeDays === "number" ? savedState.halfLifeDays : 21
   );
@@ -238,7 +240,6 @@ function Umfragetrend() {
   );
 
   const [showSettings, setShowSettings] = useState(false);
-  const [pollsVisibleCount, setPollsVisibleCount] = useState(15);
   const [showGithub, setShowGithub] = useState(true);
 
   const [formInstitute, setFormInstitute] = useState("");
@@ -273,11 +274,18 @@ function Umfragetrend() {
     return Array.from(s).sort();
   }, [instituteWeights, polls]);
 
+  const isInstituteActive = (name) => instituteActive[name] !== false;
+
+  const includedPolls = useMemo(
+    () => polls.filter((p) => isInstituteActive(p.institute)),
+    [polls, instituteActive]
+  );
+
   const asOfDate = todayISO();
 
   const currentTrend = useMemo(
-    () => weightedAverages(polls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate),
-    [polls, activeParties, instituteWeights, halfLifeDays, maxAgeDays]
+    () => weightedAverages(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate),
+    [includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays]
   );
 
   const leadingParty = useMemo(() => {
@@ -290,38 +298,41 @@ function Umfragetrend() {
   }, [currentTrend, activeParties]);
 
   const trendSeries = useMemo(() => {
-    const uniqueDates = Array.from(new Set(polls.map((p) => p.date))).sort();
+    const uniqueDates = Array.from(new Set(includedPolls.map((p) => p.date))).sort();
     return uniqueDates.map((d) => {
-      const avgs = weightedAverages(polls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, d);
+      const avgs = weightedAverages(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, d);
       const row = { ts: tsOf(d) };
       activeParties.forEach((p) => { row[p.id] = avgs[p.id]; });
       return row;
     });
-  }, [polls, activeParties, instituteWeights, halfLifeDays, maxAgeDays]);
+  }, [includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays]);
 
   const rawByParty = useMemo(() => {
     const map = {};
     activeParties.forEach((p) => {
-      map[p.id] = polls
+      map[p.id] = includedPolls
         .filter((poll) => typeof poll.values[p.id] === "number")
         .map((poll) => ({ ts: tsOf(poll.date), value: poll.values[p.id] }));
     });
     return map;
-  }, [polls, activeParties]);
+  }, [includedPolls, activeParties]);
 
   const lastPollDate = useMemo(() => {
-    if (polls.length === 0) return null;
-    return polls.reduce((max, p) => (p.date > max ? p.date : max), polls[0].date);
-  }, [polls]);
+    if (includedPolls.length === 0) return null;
+    return includedPolls.reduce((max, p) => (p.date > max ? p.date : max), includedPolls[0].date);
+  }, [includedPolls]);
+
+  const sortedPolls = useMemo(() => [...polls].sort((a, b) => (a.date < b.date ? 1 : -1)), [polls]);
+  const [visiblePollCount, setVisiblePollCount] = useState(POLL_PAGE_SIZE);
 
   // ---------- Lokaler Zwischenspeicher (Browser dieses Geräts) ----------
   useEffect(() => {
     try {
-      localStorage.setItem(STATE_KEY, JSON.stringify({ parties, polls, instituteWeights, halfLifeDays, maxAgeDays }));
+      localStorage.setItem(STATE_KEY, JSON.stringify({ parties, polls, instituteWeights, instituteActive, halfLifeDays, maxAgeDays }));
     } catch (err) {
       // Speicher voll oder blockiert - kein hartes Problem, GitHub bleibt die Quelle der Wahrheit
     }
-  }, [parties, polls, instituteWeights, halfLifeDays, maxAgeDays]);
+  }, [parties, polls, instituteWeights, instituteActive, halfLifeDays, maxAgeDays]);
 
   // ---------- GitHub Sync ----------
   function saveGithubConfig(remember) {
@@ -378,6 +389,7 @@ function Umfragetrend() {
       if (data.parties) setParties(data.parties);
       if (data.polls) setPolls(data.polls);
       if (data.instituteWeights) setInstituteWeights(data.instituteWeights);
+      if (data.instituteActive) setInstituteActive(data.instituteActive);
       if (typeof data.halfLifeDays === "number") setHalfLifeDays(data.halfLifeDays);
       if (typeof data.maxAgeDays === "number") setMaxAgeDays(data.maxAgeDays);
       setGhConnected(true);
@@ -397,7 +409,7 @@ function Umfragetrend() {
     setGhBusy(true);
     setGhStatus("Speichere auf GitHub …");
     try {
-      const payload = { parties, polls, instituteWeights, halfLifeDays, maxAgeDays };
+      const payload = { parties, polls, instituteWeights, instituteActive, halfLifeDays, maxAgeDays };
       const content = b64EncodeUtf8(JSON.stringify(payload, null, 2));
       const url = "https://api.github.com/repos/" + ghOwner + "/" + ghRepo + "/contents/" + encodeURIComponent(ghPath);
       const body = { message: "Umfragedaten aktualisiert (" + todayISO() + ")", content: content, branch: ghBranch };
@@ -437,7 +449,7 @@ function Umfragetrend() {
     ghSaveTimer.current = setTimeout(() => { githubSave(); }, 1500);
     return () => clearTimeout(ghSaveTimer.current);
     // eslint-disable-next-line
-  }, [parties, polls, instituteWeights, halfLifeDays, maxAgeDays, ghConnected]);
+  }, [parties, polls, instituteWeights, instituteActive, halfLifeDays, maxAgeDays, ghConnected]);
 
   // ---------- Formular-Handling ----------
   function resetForm() {
@@ -500,6 +512,9 @@ function Umfragetrend() {
     setNewPartyColor("#8884d8");
   }
   function updateInstituteWeight(name, w) { setInstituteWeights((prev) => ({ ...prev, [name]: w })); }
+  function toggleInstituteActive(name) {
+    setInstituteActive((prev) => ({ ...prev, [name]: prev[name] === false ? true : false }));
+  }
   function addInstituteManually() {
     const name = window.prompt("Name des neuen Instituts:");
     if (name && name.trim() && instituteWeights[name.trim()] === undefined) {
@@ -511,7 +526,7 @@ function Umfragetrend() {
   }
 
   function exportJson() {
-    const payload = { parties, polls, instituteWeights, halfLifeDays, maxAgeDays };
+    const payload = { parties, polls, instituteWeights, instituteActive, halfLifeDays, maxAgeDays };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -529,6 +544,7 @@ function Umfragetrend() {
         if (data.parties) setParties(data.parties);
         if (data.polls) setPolls(data.polls);
         if (data.instituteWeights) setInstituteWeights(data.instituteWeights);
+      if (data.instituteActive) setInstituteActive(data.instituteActive);
         if (typeof data.halfLifeDays === "number") setHalfLifeDays(data.halfLifeDays);
       if (typeof data.maxAgeDays === "number") setMaxAgeDays(data.maxAgeDays);
         setGhStatus("JSON erfolgreich importiert.");
@@ -679,55 +695,42 @@ function Umfragetrend() {
           <div className="ut-status">Noch keine Umfragen erfasst.</div>
         ) : (
           <>
-          {(() => {
-            const sortedPolls = [...polls].sort((a, b) => (a.date < b.date ? 1 : -1));
-            const visiblePolls = sortedPolls.slice(0, pollsVisibleCount);
-            const remaining = sortedPolls.length - visiblePolls.length;
-            return (
-              <>
-              <table className="ut-table">
-                <thead>
-                  <tr>
-                    <th>Institut</th><th>Datum</th>
-                    {activeParties.map((p) => <th key={p.id}>{p.name}</th>)}
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visiblePolls.map((poll) => (
-                    <tr key={poll.id}>
-                      <td>{poll.institute}</td>
-                      <td>{fmtDateShort(tsOf(poll.date))}</td>
-                      {activeParties.map((p) => (
-                        <td key={p.id}>{typeof poll.values[p.id] === "number" ? poll.values[p.id].toFixed(1).replace(".", ",") + "%" : "–"}</td>
-                      ))}
-                      <td>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button className="ut-btn secondary" style={{ padding: "4px 10px" }} onClick={() => loadPollIntoForm(poll)}>Bearbeiten</button>
-                          <button className="ut-btn danger" style={{ padding: "4px 10px" }} onClick={() => deletePoll(poll.id)}>Löschen</button>
-                        </div>
-                      </td>
-                    </tr>
+          <table className="ut-table">
+            <thead>
+              <tr>
+                <th>Institut</th><th>Datum</th>
+                {activeParties.map((p) => <th key={p.id}>{p.name}</th>)}
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedPolls.slice(0, visiblePollCount).map((poll) => {
+                const active = isInstituteActive(poll.institute);
+                return (
+                <tr key={poll.id} style={{ opacity: active ? 1 : 0.5 }}>
+                  <td>{poll.institute}{!active && <span style={{ color: "var(--text-dim)", fontSize: 11 }}> (ausgeblendet)</span>}</td>
+                  <td>{fmtDateShort(tsOf(poll.date))}</td>
+                  {activeParties.map((p) => (
+                    <td key={p.id}>{typeof poll.values[p.id] === "number" ? poll.values[p.id].toFixed(1).replace(".", ",") + "%" : "–"}</td>
                   ))}
-                </tbody>
-              </table>
-              {remaining > 0 && (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
-                  <button className="ut-btn secondary" onClick={() => setPollsVisibleCount((c) => c + 15)}>
-                    Ältere Umfragen anzeigen (+{Math.min(15, remaining)})
-                  </button>
-                </div>
-              )}
-              {pollsVisibleCount > 15 && remaining === 0 && (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
-                  <button className="ut-btn secondary" onClick={() => setPollsVisibleCount(15)}>
-                    Nur neueste anzeigen
-                  </button>
-                </div>
-              )}
-              </>
-            );
-          })()}
+                  <td>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="ut-btn secondary" style={{ padding: "4px 10px" }} onClick={() => loadPollIntoForm(poll)}>Bearbeiten</button>
+                      <button className="ut-btn danger" style={{ padding: "4px 10px" }} onClick={() => deletePoll(poll.id)}>Löschen</button>
+                    </div>
+                  </td>
+                </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {sortedPolls.length > visiblePollCount && (
+            <div className="ut-tools">
+              <button className="ut-btn secondary" onClick={() => setVisiblePollCount((n) => n + POLL_PAGE_SIZE)}>
+                Ältere Umfragen anzeigen ({sortedPolls.length - visiblePollCount} weitere)
+              </button>
+            </div>
+          )}
           </>
         )}
       </div>
@@ -769,17 +772,21 @@ function Umfragetrend() {
             </div>
 
             <div style={{ height: 24 }} />
-            <h3 style={{ fontSize: 13 }}>Institutsgewichtung (frei einstellbar)</h3>
+            <h3 style={{ fontSize: 13 }}>Institute (Gewichtung &amp; Ein-/Ausschluss)</h3>
             <div className="ut-hint" style={{ marginTop: -6, marginBottom: 10 }}>
               1,0 = neutraler Standard. Höhere Werte zählen stärker in den Trend, niedrigere schwächer.
+              Über „Aktiv" lässt sich ein Institut komplett aus Schnitt und Grafik heraus- oder wieder
+              hereinrechnen, ohne seine Umfragen zu löschen.
             </div>
             <table className="ut-table">
-              <thead><tr><th>Institut</th><th>Gewicht</th><th></th></tr></thead>
+              <thead><tr><th>Aktiv</th><th>Institut</th><th>Gewicht</th><th></th></tr></thead>
               <tbody>
                 {instituteNames.map((name) => {
                   const w = instituteWeights[name] !== undefined ? instituteWeights[name] : 1;
+                  const active = isInstituteActive(name);
                   return (
-                    <tr key={name}>
+                    <tr key={name} style={{ opacity: active ? 1 : 0.5 }}>
+                      <td><input type="checkbox" checked={active} onChange={() => toggleInstituteActive(name)} /></td>
                       <td>{name}</td>
                       <td>
                         <input type="number" step="0.05" min="0" value={w}
