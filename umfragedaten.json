@@ -1210,6 +1210,20 @@
         "sonstige": 6,
         "2ldx32a9mrqtmte9": 3.5
       }
+    },
+    {
+      "id": "4pmyry7omrxq1obk",
+      "institute": "Allensbach",
+      "date": "2026-07-23",
+      "values": {
+        "cdu": 24,
+        "spd": 13,
+        "gruene": 13,
+        "fdp": 5.5,
+        "linke": 10,
+        "afd": 26.5,
+        "sonstige": 8
+      }
     }
   ],
   "instituteWeights": {
