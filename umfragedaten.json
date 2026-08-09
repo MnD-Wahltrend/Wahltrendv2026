@@ -1356,6 +1356,20 @@
         "sonstige": 7,
         "2ldx32a9mrqtmte9": 3
       }
+    },
+    {
+      "id": "wclp4g3pmsmd74xd",
+      "institute": "infratest dimap",
+      "date": "2026-08-06",
+      "values": {
+        "cdu": 21,
+        "spd": 12,
+        "gruene": 15,
+        "fdp": 4,
+        "linke": 11,
+        "afd": 28,
+        "sonstige": 9
+      }
     }
   ],
   "instituteWeights": {
