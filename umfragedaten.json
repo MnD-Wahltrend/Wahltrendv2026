@@ -1370,6 +1370,21 @@
         "afd": 28,
         "sonstige": 9
       }
+    },
+    {
+      "id": "hcwma21nmsohp4e8",
+      "institute": "INSA",
+      "date": "2026-08-11",
+      "values": {
+        "cdu": 20.5,
+        "spd": 12.5,
+        "gruene": 13,
+        "fdp": 4.5,
+        "linke": 11.5,
+        "afd": 28.5,
+        "sonstige": 6.5,
+        "2ldx32a9mrqtmte9": 3
+      }
     }
   ],
   "instituteWeights": {
