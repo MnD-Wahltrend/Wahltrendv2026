@@ -1545,6 +1545,21 @@
         "sonstige": 8,
         "2ldx32a9mrqtmte9": 4
       }
+    },
+    {
+      "id": "fq3j50bomth77e2b",
+      "institute": "Verian (Emnid)",
+      "date": "2026-08-28",
+      "values": {
+        "cdu": 20,
+        "spd": 13,
+        "gruene": 16,
+        "fdp": 4,
+        "linke": 12,
+        "afd": 28,
+        "sonstige": 5,
+        "2ldx32a9mrqtmte9": 2
+      }
     }
   ],
   "instituteWeights": {
