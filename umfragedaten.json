@@ -1530,6 +1530,21 @@
         "afd": 28,
         "sonstige": 7
       }
+    },
+    {
+      "id": "fe9m6a4umth76mtv",
+      "institute": "INSA",
+      "date": "2026-08-29",
+      "values": {
+        "cdu": 20,
+        "spd": 12,
+        "gruene": 13,
+        "fdp": 4,
+        "linke": 10,
+        "afd": 29,
+        "sonstige": 8,
+        "2ldx32a9mrqtmte9": 4
+      }
     }
   ],
   "instituteWeights": {
