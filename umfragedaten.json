@@ -1633,6 +1633,21 @@
         "sonstige": 6.5,
         "2ldx32a9mrqtmte9": 4
       }
+    },
+    {
+      "id": "iheo8kk7mtsv4263",
+      "institute": "Forsa",
+      "date": "2026-09-08",
+      "values": {
+        "cdu": 21,
+        "spd": 12,
+        "gruene": 16,
+        "fdp": 4,
+        "linke": 11,
+        "afd": 28,
+        "sonstige": 5,
+        "2ldx32a9mrqtmte9": 3
+      }
     }
   ],
   "instituteWeights": {
