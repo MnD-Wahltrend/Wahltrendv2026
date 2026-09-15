@@ -1678,6 +1678,21 @@
         "sonstige": 6.5,
         "2ldx32a9mrqtmte9": 3.5
       }
+    },
+    {
+      "id": "x2tq5d4nmu2hd39k",
+      "institute": "YouGov",
+      "date": "2026-09-15",
+      "values": {
+        "cdu": 18,
+        "spd": 13,
+        "gruene": 16,
+        "fdp": 5,
+        "linke": 10,
+        "afd": 29,
+        "sonstige": 5,
+        "2ldx32a9mrqtmte9": 4
+      }
     }
   ],
   "instituteWeights": {
