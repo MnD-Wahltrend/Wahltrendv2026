@@ -1693,6 +1693,21 @@
         "sonstige": 5,
         "2ldx32a9mrqtmte9": 4
       }
+    },
+    {
+      "id": "5h1vqgb2mu2hdkak",
+      "institute": "GMS",
+      "date": "2026-09-14",
+      "values": {
+        "cdu": 20,
+        "spd": 11,
+        "gruene": 14,
+        "fdp": 4,
+        "linke": 11,
+        "afd": 30,
+        "sonstige": 7,
+        "2ldx32a9mrqtmte9": 3
+      }
     }
   ],
   "instituteWeights": {
