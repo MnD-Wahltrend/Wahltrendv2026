@@ -137,7 +137,31 @@ const recencyWeight = (pollDate, asOfDate, halfLifeDays, maxAgeDays) => {
   return Math.pow(0.5, diffDays / halfLifeDays);
 };
 
-function weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate) {
+// Cluster-Regel: Erscheint vom selben Institut innerhalb von 7 Tagen eine neuere Umfrage,
+// wird der Einfluss der ÄLTEREN der beiden halbiert. So dominiert ein Institut, das kurz
+// hintereinander mehrere Umfragen veröffentlicht, den Trend nicht überproportional.
+// Diese Beziehung ist unabhängig vom Stichtag (asOfDate) - sie hängt nur davon ab, ob es
+// eine neuere Umfrage desselben Instituts gibt, nicht davon, wie weit wir gerade zurückblicken.
+function computeClusterMultipliers(polls) {
+  const byInstitute = {};
+  polls.forEach((p) => {
+    if (!byInstitute[p.institute]) byInstitute[p.institute] = [];
+    byInstitute[p.institute].push(p);
+  });
+  const multipliers = {};
+  Object.values(byInstitute).forEach((list) => {
+    const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gapDays = (tsOf(sorted[i + 1].date) - tsOf(sorted[i].date)) / 86400000;
+      if (gapDays < 7) {
+        multipliers[sorted[i].id] = (multipliers[sorted[i].id] || 1) * 0.5;
+      }
+    }
+  });
+  return multipliers;
+}
+
+function weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers) {
   const sums = {};
   const weightSums = {};
   parties.forEach((p) => { sums[p.id] = 0; weightSums[p.id] = 0; });
@@ -146,7 +170,8 @@ function weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAge
     const storedWeight = instituteWeights[poll.institute];
     const iW = Math.max(0, typeof storedWeight === "number" ? storedWeight : 1);
     const rW = recencyWeight(poll.date, asOfDate, halfLifeDays, maxAgeDays);
-    const w = iW * rW;
+    const cW = (clusterMultipliers && clusterMultipliers[poll.id]) || 1;
+    const w = iW * rW * cW;
     if (w <= 0) return;
     parties.forEach((p) => {
       const v = poll.values[p.id];
@@ -281,11 +306,16 @@ function Umfragetrend() {
     [polls, instituteActive]
   );
 
+  const clusterMultipliers = useMemo(
+    () => computeClusterMultipliers(includedPolls),
+    [includedPolls]
+  );
+
   const asOfDate = todayISO();
 
   const currentTrend = useMemo(
-    () => weightedAverages(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate),
-    [includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays]
+    () => weightedAverages(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers),
+    [includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers]
   );
 
   const leadingParty = useMemo(() => {
@@ -300,7 +330,7 @@ function Umfragetrend() {
   const trendSeries = useMemo(() => {
     const uniqueDates = Array.from(new Set(includedPolls.map((p) => p.date))).sort();
     return uniqueDates.map((d) => {
-      const avgs = weightedAverages(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, d);
+      const avgs = weightedAverages(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, d, clusterMultipliers);
       const row = { ts: tsOf(d) };
       activeParties.forEach((p) => { row[p.id] = avgs[p.id]; });
       return row;
@@ -752,9 +782,14 @@ function Umfragetrend() {
             <tbody>
               {sortedPolls.slice(0, visiblePollCount).map((poll) => {
                 const active = isInstituteActive(poll.institute);
+                const halved = clusterMultipliers[poll.id] && clusterMultipliers[poll.id] < 1;
                 return (
                 <tr key={poll.id} style={{ opacity: active ? 1 : 0.5 }}>
-                  <td>{poll.institute}{!active && <span style={{ color: "var(--text-dim)", fontSize: 11 }}> (ausgeblendet)</span>}</td>
+                  <td>
+                    {poll.institute}
+                    {!active && <span style={{ color: "var(--text-dim)", fontSize: 11 }}> (ausgeblendet)</span>}
+                    {active && halved && <span style={{ color: "var(--text-dim)", fontSize: 11 }}> (Einfluss ×{clusterMultipliers[poll.id]})</span>}
+                  </td>
                   <td>{fmtDateShort(tsOf(poll.date))}</td>
                   {activeParties.map((p) => (
                     <td key={p.id}>{typeof poll.values[p.id] === "number" ? poll.values[p.id].toFixed(1).replace(".", ",") + "%" : "–"}</td>
