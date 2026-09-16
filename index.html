@@ -317,6 +317,36 @@ function Umfragetrend() {
     return map;
   }, [includedPolls, activeParties]);
 
+  // Zeitraum-Auswahl für die Grafik: rein darstellerisch, wirkt sich NICHT auf den
+  // berechneten Schnitt (currentTrend) aus - der bezieht weiterhin immer alle Umfragen ein.
+  const CHART_RANGES = [
+    { id: "1m", label: "1 Monat", days: 30 },
+    { id: "3m", label: "3 Monate", days: 90 },
+    { id: "1y", label: "1 Jahr", days: 365 },
+    { id: "max", label: "Maximum", days: null },
+  ];
+  const [chartRange, setChartRange] = useState("max");
+
+  const chartCutoffTs = useMemo(() => {
+    const range = CHART_RANGES.find((r) => r.id === chartRange);
+    if (!range || range.days === null) return null;
+    return tsOf(todayISO()) - range.days * 86400000;
+  }, [chartRange]);
+
+  const visibleTrendSeries = useMemo(() => {
+    if (chartCutoffTs === null) return trendSeries;
+    return trendSeries.filter((row) => row.ts >= chartCutoffTs);
+  }, [trendSeries, chartCutoffTs]);
+
+  const visibleRawByParty = useMemo(() => {
+    if (chartCutoffTs === null) return rawByParty;
+    const map = {};
+    Object.keys(rawByParty).forEach((id) => {
+      map[id] = rawByParty[id].filter((pt) => pt.ts >= chartCutoffTs);
+    });
+    return map;
+  }, [rawByParty, chartCutoffTs]);
+
   const lastPollDate = useMemo(() => {
     if (includedPolls.length === 0) return null;
     return includedPolls.reduce((max, p) => (p.date > max ? p.date : max), includedPolls[0].date);
@@ -684,8 +714,24 @@ function Umfragetrend() {
       </div>
 
       <div className="ut-panel">
-        <h3>Verlauf (gewichteter Trend, Punkte = einzelne Umfragen)</h3>
-        <TrendChart trendSeries={trendSeries} rawByParty={rawByParty} parties={activeParties} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <h3 style={{ margin: 0 }}>Verlauf (gewichteter Trend, Punkte = einzelne Umfragen)</h3>
+          <div style={{ display: "flex", gap: 6 }}>
+            {CHART_RANGES.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className={chartRange === r.id ? "ut-btn" : "ut-btn secondary"}
+                style={{ padding: "6px 12px", fontSize: 13 }}
+                onClick={() => setChartRange(r.id)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ height: 12 }} />
+        <TrendChart trendSeries={visibleTrendSeries} rawByParty={visibleRawByParty} parties={activeParties} />
       </div>
       </div>
 
