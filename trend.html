@@ -44,8 +44,8 @@
 const { useState, useMemo, useEffect } = React;
 
 // ====== HIER EINMALIG ANPASSEN ======
-const GH_OWNER = "MnD-Wahltrend";
-const GH_REPO = "Wahltrendv2026";
+const GH_OWNER = "DEIN-GITHUB-BENUTZERNAME";
+const GH_REPO = "DEIN-REPOSITORY";
 const GH_PATH = "umfragedaten.json";
 const GH_BRANCH = "main";
 // =====================================
@@ -66,7 +66,28 @@ const recencyWeight = (pollDate, asOfDate, halfLifeDays, maxAgeDays) => {
   return Math.pow(0.5, diffDays / halfLifeDays);
 };
 
-function weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate) {
+// Cluster-Regel: Erscheint vom selben Institut innerhalb von 7 Tagen eine neuere Umfrage,
+// wird der Einfluss der ÄLTEREN der beiden halbiert.
+function computeClusterMultipliers(polls) {
+  const byInstitute = {};
+  polls.forEach((p) => {
+    if (!byInstitute[p.institute]) byInstitute[p.institute] = [];
+    byInstitute[p.institute].push(p);
+  });
+  const multipliers = {};
+  Object.values(byInstitute).forEach((list) => {
+    const sorted = [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gapDays = (tsOf(sorted[i + 1].date) - tsOf(sorted[i].date)) / 86400000;
+      if (gapDays < 7) {
+        multipliers[sorted[i].id] = (multipliers[sorted[i].id] || 1) * 0.5;
+      }
+    }
+  });
+  return multipliers;
+}
+
+function weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers) {
   const sums = {}, weightSums = {};
   parties.forEach((p) => { sums[p.id] = 0; weightSums[p.id] = 0; });
   polls.forEach((poll) => {
@@ -74,7 +95,8 @@ function weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAge
     const stored = instituteWeights[poll.institute];
     const iW = Math.max(0, typeof stored === "number" ? stored : 1);
     const rW = recencyWeight(poll.date, asOfDate, halfLifeDays, maxAgeDays);
-    const w = iW * rW;
+    const cW = (clusterMultipliers && clusterMultipliers[poll.id]) || 1;
+    const w = iW * rW * cW;
     if (w <= 0) return;
     parties.forEach((p) => {
       const v = poll.values[p.id];
@@ -171,9 +193,11 @@ function PublicTrendView() {
   const maxAgeDays = data && typeof data.maxAgeDays === "number" ? data.maxAgeDays : 365;
   const asOfDate = todayISO();
 
+  const clusterMultipliers = useMemo(() => computeClusterMultipliers(polls), [polls]);
+
   const currentTrend = useMemo(
-    () => (data ? weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate) : {}),
-    [data]
+    () => (data ? weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers) : {}),
+    [polls, parties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers]
   );
 
   const leadingParty = useMemo(() => {
@@ -189,12 +213,12 @@ function PublicTrendView() {
     if (!data) return [];
     const uniqueDates = Array.from(new Set(polls.map((p) => p.date))).sort();
     return uniqueDates.map((d) => {
-      const avgs = weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, d);
+      const avgs = weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, d, clusterMultipliers);
       const row = { ts: tsOf(d) };
       parties.forEach((p) => { row[p.id] = avgs[p.id]; });
       return row;
     });
-  }, [data]);
+  }, [polls, parties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers]);
 
   const rawByParty = useMemo(() => {
     const map = {};
@@ -203,7 +227,7 @@ function PublicTrendView() {
         .map((poll) => ({ ts: tsOf(poll.date), value: poll.values[p.id] }));
     });
     return map;
-  }, [data]);
+  }, [polls, parties]);
 
   const lastPollDate = useMemo(() => {
     if (polls.length === 0) return null;
@@ -212,6 +236,7 @@ function PublicTrendView() {
 
   const sortedPolls = useMemo(() => [...polls].sort((a, b) => (a.date < b.date ? 1 : -1)), [polls]);
   const [visiblePollCount, setVisiblePollCount] = useState(POLL_PAGE_SIZE);
+  const [showWeightDetails, setShowWeightDetails] = useState(false);
 
   if (error) {
     return <div id="root"><div className="ut-status">{error}</div></div>;
@@ -253,7 +278,18 @@ function PublicTrendView() {
       </div>
 
       <div className="ut-panel">
-        <h3>Berücksichtigte Umfragen ({polls.length})</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <h3 style={{ margin: 0 }}>Berücksichtigte Umfragen ({polls.length})</h3>
+          <button className="ut-btn secondary" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => setShowWeightDetails((s) => !s)}>
+            {showWeightDetails ? "Gewichtung ausblenden" : "Gewichtung anzeigen"}
+          </button>
+        </div>
+        {showWeightDetails && (
+          <div className="ut-hint" style={{ marginTop: 8 }}>
+            Zeigt die drei Faktoren, aus denen sich das Gewicht jeder Umfrage im aktuellen Schnitt
+            zusammensetzt (Stand: heute). Institutsgewicht × Verfallsgewicht × Halbierungsfaktor = Gesamtgewicht.
+          </div>
+        )}
         {polls.length === 0 ? (
           <div className="ut-status">Noch keine Umfragen erfasst.</div>
         ) : (
@@ -263,18 +299,41 @@ function PublicTrendView() {
               <tr>
                 <th>Institut</th><th>Datum</th>
                 {parties.map((p) => <th key={p.id}>{p.name}</th>)}
+                {showWeightDetails && (
+                  <>
+                    <th>Institutsgewicht</th>
+                    <th>Verfallsgewicht</th>
+                    <th>Halbierung</th>
+                    <th>Gesamtgewicht</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
-              {sortedPolls.slice(0, visiblePollCount).map((poll) => (
+              {sortedPolls.slice(0, visiblePollCount).map((poll) => {
+                const storedWeight = instituteWeights[poll.institute];
+                const iW = Math.max(0, typeof storedWeight === "number" ? storedWeight : 1);
+                const rW = recencyWeight(poll.date, asOfDate, halfLifeDays, maxAgeDays);
+                const cW = clusterMultipliers[poll.id] || 1;
+                const totalW = iW * rW * cW;
+                return (
                 <tr key={poll.id}>
                   <td>{poll.institute}</td>
                   <td>{fmtDateShort(tsOf(poll.date))}</td>
                   {parties.map((p) => (
                     <td key={p.id}>{typeof poll.values[p.id] === "number" ? poll.values[p.id].toFixed(1).replace(".", ",") + "%" : "–"}</td>
                   ))}
+                  {showWeightDetails && (
+                    <>
+                      <td>{iW.toFixed(2).replace(".", ",")}×</td>
+                      <td>{rW < 0.001 && rW > 0 ? "<0,1%" : (rW * 100).toFixed(1).replace(".", ",") + "%"}</td>
+                      <td>{cW < 1 ? cW.toFixed(2).replace(".", ",") + "×" : "–"}</td>
+                      <td>{totalW < 0.0001 && totalW > 0 ? "<0,0001" : totalW.toFixed(4).replace(".", ",")}</td>
+                    </>
+                  )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           {sortedPolls.length > visiblePollCount && (
