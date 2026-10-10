@@ -1900,6 +1900,20 @@
         "sonstige": 4.5,
         "2ldx32a9mrqtmte9": 3.5
       }
+    },
+    {
+      "id": "02mlanbtmv27olna",
+      "institute": "Forsa",
+      "date": "2026-10-06",
+      "values": {
+        "cdu": 19,
+        "spd": 14,
+        "gruene": 17,
+        "fdp": 4,
+        "linke": 11,
+        "afd": 26,
+        "sonstige": 9
+      }
     }
   ],
   "instituteWeights": {
