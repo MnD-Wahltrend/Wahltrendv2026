@@ -1914,6 +1914,20 @@
         "afd": 26,
         "sonstige": 9
       }
+    },
+    {
+      "id": "icva6993mv27pcz1",
+      "institute": "Forschungsgruppe Wahlen",
+      "date": "2026-10-08",
+      "values": {
+        "cdu": 21,
+        "spd": 13,
+        "gruene": 15,
+        "fdp": 3,
+        "linke": 12,
+        "afd": 28,
+        "sonstige": 8
+      }
     }
   ],
   "instituteWeights": {
