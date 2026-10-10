@@ -1885,6 +1885,21 @@
         "sonstige": 6,
         "2ldx32a9mrqtmte9": 4
       }
+    },
+    {
+      "id": "bxahxr4fmv27o0yj",
+      "institute": "INSA",
+      "date": "2026-10-05",
+      "values": {
+        "cdu": 17.5,
+        "spd": 14.5,
+        "gruene": 14.5,
+        "fdp": 4.5,
+        "linke": 10.5,
+        "afd": 30.5,
+        "sonstige": 4.5,
+        "2ldx32a9mrqtmte9": 3.5
+      }
     }
   ],
   "instituteWeights": {
