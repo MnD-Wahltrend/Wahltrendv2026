@@ -2046,6 +2046,20 @@
         "afd": 26,
         "sonstige": 8
       }
+    },
+    {
+      "id": "76z6wpe9mvpu49vv",
+      "institute": "Forsa",
+      "date": "2026-10-20",
+      "values": {
+        "cdu": 20,
+        "spd": 13,
+        "gruene": 17,
+        "fdp": 4,
+        "linke": 11,
+        "afd": 27,
+        "sonstige": 8
+      }
     }
   ],
   "instituteWeights": {
