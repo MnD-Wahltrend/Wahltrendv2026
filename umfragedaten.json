@@ -2003,6 +2003,20 @@
         "sonstige": 6,
         "2ldx32a9mrqtmte9": 3
       }
+    },
+    {
+      "id": "jzur4wt8mvpu26f8",
+      "institute": "Allensbach",
+      "date": "2026-10-22",
+      "values": {
+        "cdu": 23,
+        "spd": 14,
+        "gruene": 14,
+        "fdp": 4,
+        "linke": 11,
+        "afd": 27,
+        "sonstige": 7
+      }
     }
   ],
   "instituteWeights": {
