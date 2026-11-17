@@ -2294,6 +2294,20 @@
         "afd": 28,
         "sonstige": 9
       }
+    },
+    {
+      "id": "fqjusjs8mwku6nlj",
+      "institute": "YouGov",
+      "date": "2026-11-17",
+      "values": {
+        "cdu": 19,
+        "spd": 15,
+        "gruene": 15,
+        "fdp": 5,
+        "linke": 10,
+        "afd": 29,
+        "sonstige": 7
+      }
     }
   ],
   "instituteWeights": {
