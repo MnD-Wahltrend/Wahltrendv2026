@@ -68,6 +68,11 @@
   .ut-asof-bar.past { border-color: var(--past); }
   .ut-asof-bar input[type="date"] { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 14px; color-scheme: dark; }
   .ut-asof-bar .ut-btn { padding: 6px 10px; font-size: 13px; }
+  .ut-asof-sep { width: 1px; height: 24px; background: var(--border); margin: 0 6px; }
+  .ut-delta { font-size: 12px; color: var(--text-dim); margin-left: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ut-delta.sig { color: var(--text); font-weight: 600; }
+  .ut-hero-delta { font-size: 22px; color: var(--text-dim); margin-left: 14px; font-variant-numeric: tabular-nums; }
+  .ut-hero-delta .ut-delta { font-size: 22px; }
 </style>
 </head>
 <body>
@@ -88,6 +93,51 @@ const isoOfDate = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padSta
 const todayISO = () => isoOfDate(new Date());
 const addDaysISO = (iso, n) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return isoOfDate(d); };
 const isValidISO = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + "T00:00:00").getTime());
+// Kalendermonate zurückrechnen; 31. August − 6 Monate = 28./29. Februar (nicht 3. März)
+const addMonthsISO = (iso, n) => {
+  const d = new Date(iso + "T00:00:00");
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + n);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return isoOfDate(d);
+};
+
+// ---------- Veränderung gegenüber einem früheren Zeitpunkt ----------
+const COMPARE_RANGES = [
+  { id: "14t", label: "14 Tage", shift: (iso) => addDaysISO(iso, -14) },
+  { id: "2m", label: "2 Monate", shift: (iso) => addMonthsISO(iso, -2) },
+  { id: "6m", label: "6 Monate", shift: (iso) => addMonthsISO(iso, -6) },
+  { id: "aus", label: "Aus", shift: null },
+];
+const round1 = (v) => Math.round(v * 10) / 10;
+// Differenz aus den GERUNDETEN Werten, damit Leser nachrechnen können (28,3 − 27,3 = +1,0)
+const roundedDelta = (now, before) => {
+  if (typeof now !== "number" || typeof before !== "number") return null;
+  return round1(round1(now) - round1(before));
+};
+const fmtPp = (v) => Math.abs(v).toFixed(1).replace(".", ",");
+// delta: undefined = Vergleich aus, null = kein Vergleichswert. unc = { margin } aus changeUncertainty.
+// Pfeil nur, wenn die Veränderung größer als die Schwankungsbreite ist; sonst "≈".
+function DeltaBadge({ delta, unc }) {
+  if (delta === undefined) return null;
+  if (delta === null) return <span className="ut-delta">(–)</span>;
+  if (Math.abs(delta) < 0.05) return <span className="ut-delta" title="Keine Veränderung">±0,0</span>;
+  const sign = delta > 0 ? "+" : "−";
+  const margin = unc && typeof unc.margin === "number" ? unc.margin : null;
+  if (margin !== null && Math.abs(delta) > margin) {
+    return (
+      <span className="ut-delta sig" title={"Über der Schwankungsbreite von ±" + fmtPp(margin) + " Pp."}>
+        {delta > 0 ? "▲ " : "▼ "}{sign}{fmtPp(delta)}
+      </span>
+    );
+  }
+  const tip = margin === null
+    ? "Zu wenige Umfragen, um die Schwankungsbreite zu schätzen"
+    : "Innerhalb der Schwankungsbreite von ±" + fmtPp(margin) + " Pp. – nicht von Null unterscheidbar";
+  return <span className="ut-delta" title={tip}>≈ {sign}{fmtPp(delta)}</span>;
+}
 const tsOf = (dateStr) => new Date(dateStr + "T00:00:00").getTime();
 const fmtDateShort = (ts) => new Date(ts).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
 const fmtDateLong = (ts) => new Date(ts).toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" });
@@ -197,6 +247,71 @@ function weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAge
   const result = {};
   parties.forEach((p) => {
     result[p.id] = weightSums[p.id] > 0 ? sums[p.id] / weightSums[p.id] : null;
+  });
+  return result;
+}
+
+// ---------- Schwankungsbreite der Veränderung (dynamische Schwelle) ----------
+// Gewicht einer einzelnen Umfrage am Stichtag. MUSS dieselbe Formel sein wie in weightedAverages.
+function pollWeight(poll, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers) {
+  if (poll.date > asOfDate) return 0;
+  const stored = instituteWeights[poll.institute];
+  const iW = Math.max(0, typeof stored === "number" ? stored : 1);
+  const rW = recencyWeight(poll.date, asOfDate, halfLifeDays, maxAgeDays);
+  const cW = (clusterMultipliers && clusterMultipliers[poll.id]) || 1;
+  return iW * rW * cW;
+}
+
+const SIG_Z = 1.96;             // ~95 %-Niveau
+const SIG_RESIDUAL_DAYS = 365;  // Zeitraum, aus dem die typische Streuung geschätzt wird
+const SIG_MIN_RESIDUALS = 5;    // darunter keine Einschätzung möglich
+
+// Idee: Der Trend ist ein gewichteter Mittelwert. Die Differenz zweier Trendwerte (Stichtag A,
+// Vergleichsdatum B) hängt nur davon ab, wie sich die relativen Gewichte der Umfragen zwischen
+// A und B verschoben haben: neu hinzugekommene Umfragen, herausgefallene, verschobene Anteile.
+// Mit a_i, b_i = normierte Gewichte und sigma = typische Abweichung einer Umfrage vom Trend gilt
+// (bei unabhängigen Umfragen):   SE(Δ) = sigma · sqrt( Σ (a_i − b_i)² )
+// Keine neue Umfrage → Gewichte verschieben sich kaum → SE ≈ 0. Viele/schwere neue Umfragen → SE größer.
+// sigma wird je Partei aus den Abweichungen jeder Umfrage vom Trend an ihrem Tag geschätzt, wobei
+// die Umfrage selbst herausgerechnet wird (leave-one-out), damit sie sich nicht selbst "bestätigt".
+// Grenzen: Umfragen sind nicht völlig unabhängig (Institutseffekte); sigma enthält auch echte
+// Bewegung und ist daher eher konservativ. Es ist eine Faustregel, kein exakter Test.
+function changeUncertainty(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers, asOfDate, compareDate) {
+  const result = {};
+  if (!compareDate) return result;
+  const windowStart = addDaysISO(asOfDate, -SIG_RESIDUAL_DAYS);
+  parties.forEach((p) => {
+    const withValue = polls.filter((poll) => typeof poll.values[p.id] === "number" && !isNaN(poll.values[p.id]));
+
+    const residuals = [];
+    withValue.forEach((poll) => {
+      if (poll.date > asOfDate || poll.date < windowStart) return;
+      let s = 0, ws = 0;
+      withValue.forEach((q) => {
+        if (q.id === poll.id) return;
+        const w = pollWeight(q, instituteWeights, halfLifeDays, maxAgeDays, poll.date, clusterMultipliers);
+        if (w > 0) { s += q.values[p.id] * w; ws += w; }
+      });
+      if (ws > 0) residuals.push(poll.values[p.id] - s / ws);
+    });
+
+    let sumA = 0, sumB = 0;
+    const wA = {}, wB = {};
+    withValue.forEach((q) => {
+      wA[q.id] = pollWeight(q, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers);
+      wB[q.id] = pollWeight(q, instituteWeights, halfLifeDays, maxAgeDays, compareDate, clusterMultipliers);
+      sumA += wA[q.id]; sumB += wB[q.id];
+    });
+
+    if (residuals.length < SIG_MIN_RESIDUALS || sumA <= 0 || sumB <= 0) {
+      result[p.id] = { se: null, margin: null };
+      return;
+    }
+    const sigma = Math.sqrt(residuals.reduce((acc, r) => acc + r * r, 0) / residuals.length);
+    let shift = 0;
+    withValue.forEach((q) => { const d = wA[q.id] / sumA - wB[q.id] / sumB; shift += d * d; });
+    const se = sigma * Math.sqrt(shift);
+    result[p.id] = { se, margin: SIG_Z * se, sigma };
   });
   return result;
 }
@@ -312,7 +427,7 @@ function Umfragetrend() {
   const asOfDate = stichtag && stichtag < today ? stichtag : today;
   const isPast = asOfDate < today;
 
-  const activeParties = parties.filter((p) => p.active);
+  const activeParties = useMemo(() => parties.filter((p) => p.active), [parties]);
 
   const instituteNames = useMemo(() => {
     const s = new Set(Object.keys(instituteWeights));
@@ -356,6 +471,26 @@ function Umfragetrend() {
     });
     return best;
   }, [currentTrend, activeParties]);
+
+  // Vergleichszeitraum: Trend am Stichtag minus X, mit identischer Methode berechnet
+  const [compareId, setCompareId] = useState("14t");
+  const compareRange = COMPARE_RANGES.find((r) => r.id === compareId);
+  const compareDate = compareRange && compareRange.shift ? compareRange.shift(asOfDate) : null;
+  const compareTrend = useMemo(
+    () => (compareDate ? weightedAverages(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, compareDate, clusterMultipliers) : null),
+    [includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, compareDate, clusterMultipliers]
+  );
+  // undefined = Vergleich aus, null = zum Vergleichszeitpunkt kein Wert vorhanden
+  const deltaFor = (id) => (compareTrend ? roundedDelta(currentTrend[id], compareTrend[id]) : undefined);
+  // Dynamische Schwelle: hängt davon ab, wie viel Gewicht seit dem Vergleichsdatum neu hinzugekommen ist
+  const uncertainty = useMemo(
+    () => (compareDate ? changeUncertainty(includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers, asOfDate, compareDate) : {}),
+    [includedPolls, activeParties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers, asOfDate, compareDate]
+  );
+  const newPollCount = useMemo(
+    () => (compareDate ? includedPolls.filter((p) => p.date > compareDate && p.date <= asOfDate).length : 0),
+    [includedPolls, compareDate, asOfDate]
+  );
 
   // Trendlinie bis einschließlich Stichtag. Der Stichtag selbst wird als letzter Punkt
   // ergänzt, damit die Linie genau bei dem Wert endet, der oben als Trend angezeigt wird.
@@ -774,6 +909,13 @@ function Umfragetrend() {
         <button className="ut-btn secondary" type="button" title="Einen Tag vor" disabled={!isPast} onClick={() => shiftStichtag(1)}>1 T ›</button>
         <button className="ut-btn secondary" type="button" title="Eine Woche vor" disabled={!isPast} onClick={() => shiftStichtag(7)}>7 T »</button>
         <button className={isPast ? "ut-btn" : "ut-btn secondary"} type="button" disabled={!isPast} onClick={() => setStichtag(null)}>Heute</button>
+        <span className="ut-asof-sep" />
+        <span style={{ color: "var(--text-dim)" }}>Veränderung ggü.</span>
+        {COMPARE_RANGES.map((r) => (
+          <button key={r.id} type="button" className={compareId === r.id ? "ut-btn" : "ut-btn secondary"} onClick={() => setCompareId(r.id)}>
+            {r.label}
+          </button>
+        ))}
         {isPast && (
           <span style={{ color: "var(--text-dim)", fontSize: 12, flexBasis: "100%" }}>
             Rückblick: Es zählen nur Umfragen bis einschließlich {fmtDateLong(tsOf(asOfDate))}. Institutsgewichte,
@@ -790,8 +932,11 @@ function Umfragetrend() {
             {isPast ? "Trend am " + fmtDateLong(tsOf(asOfDate)) : "Aktueller Trend"}
           </div>
           {leadingParty ? (
-            <div className="ut-display ut-hero-number" style={{ color: leadingParty.party.color }}>
-              {leadingParty.value.toFixed(1).replace(".", ",")}%
+            <div style={{ display: "flex", alignItems: "baseline" }}>
+              <div className="ut-display ut-hero-number" style={{ color: leadingParty.party.color }}>
+                {leadingParty.value.toFixed(1).replace(".", ",")}%
+              </div>
+              <span className="ut-hero-delta"><DeltaBadge delta={deltaFor(leadingParty.party.id)} unc={uncertainty[leadingParty.party.id]} /></span>
             </div>
           ) : (
             <div className="ut-display ut-hero-number" style={{ color: "var(--text-dim)" }}>—</div>
@@ -807,9 +952,17 @@ function Umfragetrend() {
               <div className="ut-chip" key={p.id}>
                 <span className="ut-dot" style={{ background: p.color }} />
                 {p.name}: {currentTrend[p.id] !== null ? currentTrend[p.id].toFixed(1).replace(".", ",") + "%" : "–"}
+                <DeltaBadge delta={deltaFor(p.id)} unc={uncertainty[p.id]} />
               </div>
             ))}
           </div>
+          {compareDate && (
+            <div className="ut-hero-meta" style={{ marginTop: 10, marginBottom: 0 }}>
+              Veränderung in Prozentpunkten gegenüber dem Trend vom {fmtDateLong(tsOf(compareDate))}
+              {" · seitdem " + (newPollCount === 1 ? "1 neue Umfrage" : newPollCount + " neue Umfragen")}.
+              {" "}▲▼ = größer als die statistische Schwankungsbreite, ≈ = innerhalb (nicht von Null unterscheidbar).
+            </div>
+          )}
         </div>
       </div>
 
