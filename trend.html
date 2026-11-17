@@ -9,7 +9,7 @@
 <style>
   :root {
     --bg: #0b1424; --panel: #121d30; --panel-2: #0e1826; --border: #1e2c42;
-    --text: #f4f6fb; --text-dim: #8fa0bc; --accent: #3f6ea5;
+    --text: #f4f6fb; --text-dim: #8fa0bc; --accent: #3f6ea5; --past: #d9a441;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -19,6 +19,7 @@
   .ut-hero-number { font-size: 64px; line-height: 1; letter-spacing: -0.02em; }
   .ut-hero-meta { color: var(--text-dim); font-size: 13px; margin-bottom: 6px; }
   .ut-hero-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 4px; }
+  .ut-hero-label.past { color: var(--past); }
   .ut-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
   .ut-chip { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
   .ut-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
@@ -31,6 +32,16 @@
   .ut-chart-empty { color: var(--text-dim); font-size: 13px; }
   .ut-footer { text-align: center; font-size: 12px; color: var(--text-dim); margin-top: 30px; }
   .ut-footer a { color: var(--text-dim); }
+  .ut-btn { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .ut-btn:hover { filter: brightness(1.1); }
+  .ut-btn.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  .ut-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ut-tools { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .ut-hint { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-top: 10px; }
+  .ut-asof-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+  .ut-asof-bar.past { border-color: var(--past); }
+  .ut-asof-bar input[type="date"] { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 14px; font-family: inherit; color-scheme: dark; }
+  .ut-asof-bar .ut-btn { padding: 6px 10px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -53,11 +64,33 @@ const GH_BRANCH = "main";
 const RAW_URL = "https://raw.githubusercontent.com/" + GH_OWNER + "/" + GH_REPO + "/" + GH_BRANCH + "/" + GH_PATH;
 const REFRESH_MS = 5 * 60 * 1000; // alle 5 Minuten neu laden
 const POLL_PAGE_SIZE = 15;
+const URL_PARAM = "stand"; // z. B. trend.html?stand=2026-09-01
 
+// Lokales Datum (nicht UTC), sonst springt "heute" in Deutschland zwischen 0 und 1/2 Uhr auf gestern
+const isoOfDate = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const todayISO = () => isoOfDate(new Date());
+const addDaysISO = (iso, n) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return isoOfDate(d); };
+const isValidISO = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + "T00:00:00").getTime());
 const tsOf = (dateStr) => new Date(dateStr + "T00:00:00").getTime();
 const fmtDateShort = (ts) => new Date(ts).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
 const fmtDateLong = (ts) => new Date(ts).toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" });
-const todayISO = () => new Date().toISOString().slice(0, 10);
+
+function readStichtagFromUrl() {
+  try {
+    const v = new URLSearchParams(window.location.search).get(URL_PARAM);
+    return isValidISO(v) && v < todayISO() ? v : null;
+  } catch (err) {
+    return null;
+  }
+}
+function writeStichtagToUrl(value) {
+  try {
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set(URL_PARAM, value);
+    else url.searchParams.delete(URL_PARAM);
+    window.history.replaceState(null, "", url.toString());
+  } catch (err) {}
+}
 
 const recencyWeight = (pollDate, asOfDate, halfLifeDays, maxAgeDays) => {
   const diffDays = (tsOf(asOfDate) - tsOf(pollDate)) / 86400000;
@@ -67,7 +100,8 @@ const recencyWeight = (pollDate, asOfDate, halfLifeDays, maxAgeDays) => {
 };
 
 // Cluster-Regel: Erscheint vom selben Institut innerhalb von 7 Tagen eine neuere Umfrage,
-// wird der Einfluss der ÄLTEREN der beiden halbiert.
+// wird der Einfluss der ÄLTEREN der beiden halbiert. Unabhängig vom Stichtag berechnet
+// (identisch zum Backend), damit Stichtagswert und Trendlinie übereinstimmen.
 function computeClusterMultipliers(polls) {
   const byInstitute = {};
   polls.forEach((p) => {
@@ -115,7 +149,7 @@ function TrendChart({ trendSeries, rawByParty, parties }) {
   const innerH = height - margin.top - margin.bottom;
   const allRaw = parties.flatMap((p) => rawByParty[p.id] || []);
   const allTs = [...trendSeries.map((r) => r.ts), ...allRaw.map((r) => r.ts)];
-  if (allTs.length === 0) return <div className="ut-chart-empty">Noch keine Umfragen vorhanden.</div>;
+  if (allTs.length === 0) return <div className="ut-chart-empty">Keine Umfragen bis zu diesem Datum.</div>;
   const minTs = Math.min(...allTs), maxTs = Math.max(...allTs);
   const allVals = [
     ...trendSeries.flatMap((r) => parties.map((p) => r[p.id]).filter((v) => typeof v === "number")),
@@ -163,6 +197,22 @@ function PublicTrendView() {
   const [error, setError] = useState("");
   const [lastFetched, setLastFetched] = useState(null);
 
+  // Stichtag: null = heute. Wird in der URL gespiegelt (?stand=JJJJ-MM-TT), damit man
+  // einen historischen Stand direkt verlinken kann.
+  const [stichtag, setStichtag] = useState(readStichtagFromUrl);
+  const today = todayISO();
+  const asOfDate = stichtag && stichtag < today ? stichtag : today;
+  const isPast = asOfDate < today;
+
+  function changeStichtag(value) {
+    const next = value && isValidISO(value) && value < todayISO() ? value : null;
+    setStichtag(next);
+    writeStichtagToUrl(next);
+  }
+  function shiftStichtag(days) {
+    changeStichtag(addDaysISO(asOfDate, days));
+  }
+
   async function load() {
     try {
       const res = await fetch(RAW_URL + "?t=" + Date.now()); // Cache-Buster, damit immer der aktuelle Stand kommt
@@ -191,13 +241,20 @@ function PublicTrendView() {
   );
   const halfLifeDays = data && typeof data.halfLifeDays === "number" ? data.halfLifeDays : 21;
   const maxAgeDays = data && typeof data.maxAgeDays === "number" ? data.maxAgeDays : 365;
-  const asOfDate = todayISO();
+
+  // Nur Umfragen, die am Stichtag bereits veröffentlicht waren
+  const pollsUntilAsOf = useMemo(() => polls.filter((p) => p.date <= asOfDate), [polls, asOfDate]);
+
+  const earliestPollDate = useMemo(() => {
+    if (polls.length === 0) return null;
+    return polls.reduce((min, p) => (p.date < min ? p.date : min), polls[0].date);
+  }, [polls]);
 
   const clusterMultipliers = useMemo(() => computeClusterMultipliers(polls), [polls]);
 
   const currentTrend = useMemo(
     () => (data ? weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers) : {}),
-    [polls, parties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers]
+    [polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers]
   );
 
   const leadingParty = useMemo(() => {
@@ -209,37 +266,41 @@ function PublicTrendView() {
     return best;
   }, [currentTrend, parties]);
 
+  // Trendlinie bis einschließlich Stichtag; der Stichtag selbst wird als letzter Punkt
+  // ergänzt, damit die Linie genau bei dem oben angezeigten Wert endet.
   const trendSeries = useMemo(() => {
     if (!data) return [];
-    const uniqueDates = Array.from(new Set(polls.map((p) => p.date))).sort();
-    return uniqueDates.map((d) => {
+    const dates = Array.from(new Set(pollsUntilAsOf.map((p) => p.date)));
+    if (dates.length > 0 && !dates.includes(asOfDate)) dates.push(asOfDate);
+    dates.sort();
+    return dates.map((d) => {
       const avgs = weightedAverages(polls, parties, instituteWeights, halfLifeDays, maxAgeDays, d, clusterMultipliers);
       const row = { ts: tsOf(d) };
       parties.forEach((p) => { row[p.id] = avgs[p.id]; });
       return row;
     });
-  }, [polls, parties, instituteWeights, halfLifeDays, maxAgeDays, clusterMultipliers]);
+  }, [pollsUntilAsOf, polls, parties, instituteWeights, halfLifeDays, maxAgeDays, asOfDate, clusterMultipliers]);
 
   const rawByParty = useMemo(() => {
     const map = {};
     parties.forEach((p) => {
-      map[p.id] = polls.filter((poll) => typeof poll.values[p.id] === "number")
+      map[p.id] = pollsUntilAsOf.filter((poll) => typeof poll.values[p.id] === "number")
         .map((poll) => ({ ts: tsOf(poll.date), value: poll.values[p.id] }));
     });
     return map;
-  }, [polls, parties]);
+  }, [pollsUntilAsOf, parties]);
 
   const lastPollDate = useMemo(() => {
-    if (polls.length === 0) return null;
-    return polls.reduce((max, p) => (p.date > max ? p.date : max), polls[0].date);
-  }, [data]);
+    if (pollsUntilAsOf.length === 0) return null;
+    return pollsUntilAsOf.reduce((max, p) => (p.date > max ? p.date : max), pollsUntilAsOf[0].date);
+  }, [pollsUntilAsOf]);
 
-  const sortedPolls = useMemo(() => [...polls].sort((a, b) => (a.date < b.date ? 1 : -1)), [polls]);
+  const sortedPolls = useMemo(() => [...pollsUntilAsOf].sort((a, b) => (a.date < b.date ? 1 : -1)), [pollsUntilAsOf]);
   const [visiblePollCount, setVisiblePollCount] = useState(POLL_PAGE_SIZE);
   const [showWeightDetails, setShowWeightDetails] = useState(false);
 
   if (error) {
-    return <div id="root"><div className="ut-status">{error}</div></div>;
+    return <div className="ut-status">{error}</div>;
   }
   if (!data) {
     return <div className="ut-status">Lade Umfragedaten …</div>;
@@ -247,9 +308,34 @@ function PublicTrendView() {
 
   return (
     <div>
+      <div className={"ut-asof-bar" + (isPast ? " past" : "")}>
+        <span style={{ color: "var(--text-dim)" }}>Stand:</span>
+        <button className="ut-btn secondary" type="button" title="Eine Woche zurück" onClick={() => shiftStichtag(-7)}>« 7 T</button>
+        <button className="ut-btn secondary" type="button" title="Einen Tag zurück" onClick={() => shiftStichtag(-1)}>‹ 1 T</button>
+        <input
+          type="date"
+          aria-label="Stichtag"
+          value={asOfDate}
+          max={today}
+          min={earliestPollDate || undefined}
+          onChange={(e) => changeStichtag(e.target.value)}
+        />
+        <button className="ut-btn secondary" type="button" title="Einen Tag vor" disabled={!isPast} onClick={() => shiftStichtag(1)}>1 T ›</button>
+        <button className="ut-btn secondary" type="button" title="Eine Woche vor" disabled={!isPast} onClick={() => shiftStichtag(7)}>7 T »</button>
+        <button className={isPast ? "ut-btn" : "ut-btn secondary"} type="button" disabled={!isPast} onClick={() => changeStichtag(null)}>Heute</button>
+        {isPast && (
+          <span style={{ color: "var(--text-dim)", fontSize: 12, flexBasis: "100%" }}>
+            Rückblick: Berechnet aus allen bis {fmtDateLong(tsOf(asOfDate))} erfassten Umfragen, mit der heute
+            gültigen Gewichtung. Der Link zu dieser Ansicht enthält das Datum und lässt sich teilen.
+          </span>
+        )}
+      </div>
+
       <div className="ut-hero">
         <div>
-          <div className="ut-hero-label">Aktueller Trend</div>
+          <div className={"ut-hero-label" + (isPast ? " past" : "")}>
+            {isPast ? "Trend am " + fmtDateLong(tsOf(asOfDate)) : "Aktueller Trend"}
+          </div>
           {leadingParty ? (
             <div className="ut-display ut-hero-number" style={{ color: leadingParty.party.color }}>
               {leadingParty.value.toFixed(1).replace(".", ",")}%
@@ -258,8 +344,10 @@ function PublicTrendView() {
             <div className="ut-display ut-hero-number" style={{ color: "var(--text-dim)" }}>—</div>
           )}
           <div className="ut-hero-meta">
-            {leadingParty ? leadingParty.party.name + " liegt vorn" : "Noch keine Umfragen erfasst"}
-            {lastPollDate ? " · zuletzt erfasst am " + fmtDateLong(tsOf(lastPollDate)) : ""}
+            {leadingParty
+              ? leadingParty.party.name + (isPast ? " lag vorn" : " liegt vorn")
+              : (isPast ? "Keine Umfragen bis zu diesem Datum" : "Noch keine Umfragen erfasst")}
+            {lastPollDate ? " · letzte berücksichtigte Umfrage vom " + fmtDateLong(tsOf(lastPollDate)) : ""}
           </div>
           <div className="ut-chips">
             {parties.map((p) => (
@@ -273,25 +361,25 @@ function PublicTrendView() {
       </div>
 
       <div className="ut-panel">
-        <h3>Verlauf (gewichteter Trend, Punkte = einzelne Umfragen)</h3>
+        <h3>Verlauf (gewichteter Trend, Punkte = einzelne Umfragen){isPast ? " bis " + fmtDateShort(tsOf(asOfDate)) : ""}</h3>
         <TrendChart trendSeries={trendSeries} rawByParty={rawByParty} parties={parties} />
       </div>
 
       <div className="ut-panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <h3 style={{ margin: 0 }}>Berücksichtigte Umfragen ({polls.length})</h3>
+          <h3 style={{ margin: 0 }}>Berücksichtigte Umfragen ({pollsUntilAsOf.length})</h3>
           <button className="ut-btn secondary" style={{ padding: "6px 12px", fontSize: 13 }} onClick={() => setShowWeightDetails((s) => !s)}>
             {showWeightDetails ? "Gewichtung ausblenden" : "Gewichtung anzeigen"}
           </button>
         </div>
         {showWeightDetails && (
           <div className="ut-hint" style={{ marginTop: 8 }}>
-            Zeigt die drei Faktoren, aus denen sich das Gewicht jeder Umfrage im aktuellen Schnitt
-            zusammensetzt (Stand: heute). Institutsgewicht × Verfallsgewicht × Halbierungsfaktor = Gesamtgewicht.
+            Zeigt die drei Faktoren, aus denen sich das Gewicht jeder Umfrage im Schnitt
+            zusammensetzt (Stand: {isPast ? fmtDateLong(tsOf(asOfDate)) : "heute"}). Institutsgewicht × Verfallsgewicht × Halbierungsfaktor = Gesamtgewicht.
           </div>
         )}
-        {polls.length === 0 ? (
-          <div className="ut-status">Noch keine Umfragen erfasst.</div>
+        {sortedPolls.length === 0 ? (
+          <div className="ut-status">{isPast ? "Bis zu diesem Datum wurden keine Umfragen erfasst." : "Noch keine Umfragen erfasst."}</div>
         ) : (
           <>
           <table className="ut-table">
