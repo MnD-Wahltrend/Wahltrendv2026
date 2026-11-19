@@ -918,7 +918,7 @@ function Umfragetrend() {
         ))}
         {isPast && (
           <span style={{ color: "var(--text-dim)", fontSize: 12, flexBasis: "100%" }}>
-            Rückblick: Es zählen nur Umfragen bis einschließlich {fmtDateLong(tsOf(asOfDate))}. Institutsgewichte,
+            Rückblick: Es zählen nur Umfragen bis einschließlich {fmtDateLong(tsOf(asOfDate))}. ichte,
             Halbwertszeit und Höchstalter sind die <em>heutigen</em> Einstellungen, nicht die damals gültigen.
             Umfragen nach dem Stichtag sind in der Tabelle unten ausgegraut.
           </span>
@@ -1014,8 +1014,8 @@ function Umfragetrend() {
                 {activeParties.map((p) => <th key={p.id}>{p.name}</th>)}
                 {showWeightDetails && (
                   <>
-                    <th>Institutsgewicht</th>
-                    <th>Verfallsgewicht</th>
+                    <th>IGW</th>
+                    <th>VGW</th>
                     <th>Halbierung</th>
                     <th>Gesamtgewicht</th>
                   </>
