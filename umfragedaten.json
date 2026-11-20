@@ -2308,6 +2308,21 @@
         "afd": 29,
         "sonstige": 7
       }
+    },
+    {
+      "id": "nvobu1oymwowjpvq",
+      "institute": "Verian (Emnid)",
+      "date": "2026-11-20",
+      "values": {
+        "cdu": 20,
+        "spd": 14,
+        "gruene": 15,
+        "fdp": 4,
+        "linke": 10,
+        "afd": 28,
+        "sonstige": 6,
+        "2ldx32a9mrqtmte9": 3
+      }
     }
   ],
   "instituteWeights": {
